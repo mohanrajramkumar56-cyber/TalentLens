@@ -8,4 +8,3 @@ langchain-text-splitters
 faiss-cpu
 pypdf
 openai
-mangum
