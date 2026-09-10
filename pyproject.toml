@@ -15,6 +15,3 @@ dependencies = [
     "openai",
     "mangum",
 ]
-
-[tool.vercel]
-entrypoint = "backend:app"

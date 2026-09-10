@@ -324,5 +324,5 @@ def chat(q: Question):
     return {"answer": answer}
 
 
-# Vercel handler
-handler = Mangum(app)
+# Vercel expects the ASGI app to be exported
+# The handler will be called by Vercel's Python runtime
