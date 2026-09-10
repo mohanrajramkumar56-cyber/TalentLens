@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Uploaded / generated data
+uploaded_resumes/
+storage/
+*.pdf
+
+# OS / editor
+.DS_Store
+Thumbs.db
