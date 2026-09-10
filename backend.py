@@ -7,10 +7,9 @@ from pydantic import BaseModel
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain.chains import ConversationalRetrievalChain
-from langchain_community.llms import Ollama
 from langchain.memory import ConversationBufferMemory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,9 +23,15 @@ STATE = {"conversation": None, "ready": False}
 def build_chain(docs):
     splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = splitter.split_documents(docs)
-    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    
+    # Get OpenAI API key from environment
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    if not openai_api_key:
+        raise ValueError("OPENAI_API_KEY environment variable not set")
+    
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vector_store = FAISS.from_documents(chunks, embeddings)
-    llm = Ollama(model="llama3")
+    llm = ChatOpenAI(model="gpt-3.5-turbo", openai_api_key=openai_api_key, temperature=0)
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm, retriever=vector_store.as_retriever(), memory=memory
@@ -68,7 +73,7 @@ def upload(files: list[UploadFile] = File(...)):
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"error": f"Processing failed (is Ollama running?): {e}"},
+            content={"error": f"Processing failed: {e}"},
         )
     STATE["conversation"] = chain
     STATE["ready"] = True

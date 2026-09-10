@@ -1,2 +1,19 @@
+[project]
+name = "rag-resume-bot"
+version = "0.1.0"
+description = "RAG-powered resume intelligence chatbot"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "langchain",
+    "langchain-community",
+    "langchain-openai",
+    "faiss-cpu",
+    "pypdf",
+    "openai",
+]
+
 [tool.vercel]
 entrypoint = "backend:app"

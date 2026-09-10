@@ -3,5 +3,7 @@ uvicorn
 python-multipart
 langchain
 langchain-community
+langchain-openai
 faiss-cpu
 pypdf
+openai
