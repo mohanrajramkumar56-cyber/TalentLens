@@ -1,11 +1,11 @@
 import os
 import tempfile
+import json
 from typing import List
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import json
 from pypdf import PdfReader
 from openai import OpenAI
 
@@ -136,4 +136,67 @@ Please answer the question based on the resume content."""
         return {"answer": answer}
         
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Chat failed: {str(e)}"})
+        error_msg = str(e)
+        # If it's the proxies error, try without that parameter
+        if "proxies" in error_msg:
+            try:
+                # Fallback: Use environment variable directly
+                import subprocess
+                result = subprocess.run([
+                    "python", "-c",
+                    f"from openai import OpenAI; import os; os.environ['OPENAI_API_KEY']='{api_key}'; c=OpenAI(); r=c.chat.completions.create(model='gpt-3.5-turbo', messages=[{{'role':'user','content':'{q.question}'}}]); print(r.choices[0].message.content)"
+                ], capture_output=True, text=True)
+                return {"answer": result.stdout}
+            except:
+                pass
+        return JSONResponse(status_code=500, content={"error": f"Chat failed: {error_msg}"})
+
+@app.post("/api/interview")
+def generate_interview():
+    """Generate interview questions based on resume"""
+    if not STATE["ready"]:
+        return JSONResponse(
+            status_code=400, content={"error": "Please upload resumes first."}
+        )
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return JSONResponse(status_code=500, content={"error": "OPENAI_API_KEY not set"})
+    
+    try:
+        client = OpenAI(api_key=api_key)
+        
+        prompt = f"""Based on these resumes, generate comprehensive interview questions for the candidate.
+
+Resumes:
+{STATE["documents"]}
+
+Generate 15-20 interview questions covering:
+
+TECHNICAL QUESTIONS (Based on their skills/experience):
+- 5-7 specific technical questions related to their tech stack
+- Include problem-solving scenarios
+- Include architecture/design questions
+
+GENERAL QUESTIONS (Behavioral & Soft Skills):
+- 5-7 behavioral questions about teamwork, conflict resolution, leadership
+- Questions about their achievements and challenges
+- Questions about their career goals and motivation
+
+Format as two separate lists with clear numbering."""
+        
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert HR interviewer and technical recruiter. Generate thoughtful, fair interview questions."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            max_tokens=2000,
+        )
+        
+        answer = response.choices[0].message.content
+        return {"questions": answer}
+        
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"Interview generation failed: {str(e)}"})
