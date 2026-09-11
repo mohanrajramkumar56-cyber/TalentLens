@@ -57,13 +57,28 @@ def build_chain(docs):
 
 @app.get("/")
 def index():
-    """Serve the original TalentLens UI"""
-    try:
-        html_path = os.path.join(os.path.dirname(__file__), "..", "index.html")
-        with open(html_path, "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    except FileNotFoundError:
-        return HTMLResponse(content="<h1>Error: index.html not found</h1>", status_code=500)
+    """Redirect to index.html or serve simple page"""
+    return HTMLResponse(content="""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TalentLens</title>
+</head>
+<body>
+    <h1>TalentLens API is running!</h1>
+    <p>Please access the UI at: <a href="/index.html">/index.html</a></p>
+    <p>Or use the API endpoints:</p>
+    <ul>
+        <li>GET /api/status - Check if resumes are loaded</li>
+        <li>POST /api/upload - Upload PDF resumes</li>
+        <li>POST /api/chat - Ask questions about resumes</li>
+        <li>POST /api/reset - Reset the system</li>
+    </ul>
+</body>
+</html>
+    """)
 
 
 @app.get("/api/status")
