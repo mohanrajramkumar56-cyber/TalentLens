@@ -41,10 +41,13 @@ def build_chain(docs):
     if not openai_api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     
-    # Fixed: Use api_key parameter instead of openai_api_key
-    embeddings = OpenAIEmbeddings(api_key=openai_api_key)
+    # Use environment variable - let langchain-openai handle it
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+    
+    # Initialize without passing api_key parameter
+    embeddings = OpenAIEmbeddings()
     vector_store = FAISS.from_documents(chunks, embeddings)
-    llm = ChatOpenAI(model="gpt-3.5-turbo", api_key=openai_api_key, temperature=0)
+    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0)
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm, retriever=vector_store.as_retriever(), memory=memory
