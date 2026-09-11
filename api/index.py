@@ -72,32 +72,23 @@ STATE = {"conversation": None, "ready": False}
 
 @app.get("/")
 def index():
-    """Root endpoint"""
-    return HTMLResponse(content="""
+    """Root endpoint - serve the UI"""
+    try:
+        ui_path = os.path.join(os.path.dirname(__file__), "ui.html")
+        with open(ui_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except Exception as e:
+        return HTMLResponse(content=f"""
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <title>TalentLens - Diagnostic</title>
-    <style>
-        body { font-family: Arial; max-width: 800px; margin: 50px auto; padding: 20px; }
-        .success { color: green; }
-        .error { color: red; }
-    </style>
-</head>
+<head><title>TalentLens</title></head>
 <body>
-    <h1>TalentLens - System Check</h1>
-    <p class="success">✓ API is running!</p>
-    <h3>Test Endpoints:</h3>
-    <ul>
-        <li><a href="/api/test">/api/test</a> - Test basic functionality</li>
-        <li><a href="/api/status">/api/status</a> - Check system status</li>
-        <li><a href="/api/test-imports">/api/test-imports</a> - Test all imports</li>
-    </ul>
-    <p>For full UI: <a href="/index.html">Open TalentLens UI</a></p>
+    <h1>TalentLens</h1>
+    <p>Error loading UI: {str(e)}</p>
+    <p><a href="/api/test">Test API</a></p>
 </body>
 </html>
-    """)
+        """)
 
 @app.get("/api/test")
 def test():

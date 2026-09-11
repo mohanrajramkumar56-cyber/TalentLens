@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+  <meta charset=\"UTF-8\" />
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+  <title>TalentLens</title>
+  <script src=\"https://cdn.tailwindcss.com\"></script>
+  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />
+  <link href=\"https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap\" rel=\"stylesheet\" />
+  <style>
+    * { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+    body { background: #05060f; }
+
+    /* animated gradient blobs */
+    .blob { position: fixed; border-radius: 50%; filter: blur(90px); opacity: .5; z-index: 0; pointer-events: none; }
+    .blob-1 { width: 460px; height: 460px; background: #4f46e5; top: -120px; left: -100px; animation: float1 16s ease-in-out infinite; }
+    .blob-2 { width: 420px; height: 420px; background: #7c3aed; bottom: -140px; right: -80px; animation: float2 18s ease-in-out infinite; }
+    .blob-3 { width: 300px; height: 300px; background: #0ea5e9; top: 40%; left: 45%; animation: float3 20s ease-in-out infinite; }
+    @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,40px) scale(1.15); } }
+    @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-40px) scale(1.1); } }
+    @keyframes float3 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-40px,50px); } }
+
+    #particles { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+    .glass { background: rgba(15,18,32,.7); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); }
+
+    .tilt { transform-style: preserve-3d; transition: transform .15s ease; will-change: transform; }
+
+    .grad-text { background: linear-gradient(90deg,#818cf8,#c084fc,#38bdf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+    .dot { animation: blink 1.4s infinite both; }
+    .dot:nth-child(2) { animation-delay: .2s; }
+    .dot:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%,80%,100% { opacity:.2; } 40% { opacity:1; } }
+
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 8px; }
+  </style>
+</head>
+<body class=\"text-slate-100 min-h-screen overflow-x-hidden\">
+
+  <!-- background -->
+  <div class=\"blob blob-1\"></div>
+  <div class=\"blob blob-2\"></div>
+  <div class=\"blob blob-3\"></div>
+  <canvas id=\"particles\"></canvas>
+
+  <div class=\"relative z-10\">
+
+    <!-- NAVBAR -->
+    <nav class=\"sticky top-0 z-40 glass border-b border-white/10\">
+      <div class=\"max-w-7xl mx-auto px-4 h-16 flex items-center gap-4\">
+        <button id=\"sidebarToggle\" class=\"md:hidden p-2 rounded-lg hover:bg-white/10\">☰</button>
+        <div class=\"flex items-center gap-2\">
+          <div class=\"w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-extrabold text-white shadow-lg shadow-indigo-500/30\">T</div>
+          <span class=\"text-xl font-extrabold tracking-tight\">Talent<span class=\"grad-text\">Lens</span></span>
+        </div>
+        <div class=\"ml-auto flex items-center gap-3\">
+          <span id=\"status\" class=\"px-3 py-1 rounded-full text-xs font-semibold bg-white/5 border border-white/10 text-slate-300\">No resumes loaded</span>
+          <button id=\"newChatBtn\" class=\"px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold transition shadow-lg shadow-indigo-600/25\">+ New Chat</button>
+        </div>
+      </div>
+    </nav>
+
+    <div class=\"max-w-7xl mx-auto flex gap-6 p-4 md:p-6\">
+
+      <!-- SIDEBAR -->
+      <aside id=\"sidebar\" class=\"hidden md:flex flex-col w-72 shrink-0 h-[calc(100vh-7rem)] sticky top-20 glass rounded-2xl p-4\">
+        <div class=\"flex items-center justify-between mb-3\">
+          <h2 class=\"text-sm font-bold uppercase tracking-wider text-slate-400\">Conversations</h2>
+          <button id=\"clearAllBtn\" class=\"text-xs text-slate-500 hover:text-red-400\">clear all</button>
+        </div>
+        <div id=\"convList\" class=\"flex-1 overflow-y-auto space-y-2\"></div>
+        <div class=\"mt-3 pt-3 border-t border-white/10 text-[11px] text-slate-500\">
+          History is saved in your browser.
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <main id=\"mainCard\" class=\"tilt flex-1 glass rounded-2xl p-4 md:p-6 h-[calc(100vh-7rem)] flex flex-col\">
+
+        <!-- UPLOAD STAGE -->
+        <section id=\"uploadStage\" class=\"flex-1 flex flex-col items-center justify-center text-center\">
+          <div id=\"dropZone\" class=\"w-full max-w-xl border-2 border-dashed border-white/15 rounded-3xl p-10 cursor-pointer hover:border-indigo-400 hover:bg-white/5 transition\">
+            <div class=\"text-5xl mb-4\" id=\"uploadIcon\">📄</div>
+            <p class=\"text-lg font-semibold\" id=\"fileCount\">Drag & drop resumes here</p>
+            <p class=\"text-sm text-slate-400 mt-1\">or click to browse — PDF only, multiple allowed</p>
+          </div>
+          <input id=\"files\" type=\"file\" accept=\"application/pdf\" multiple class=\"hidden\" />
+          <button id=\"processBtn\" class=\"mt-6 px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 font-bold transition shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed\">
+            ⚡ Process Resumes
+          </button>
+          <div id=\"uploadMsg\" class=\"mt-4 text-sm text-slate-400 min-h-[1.25rem]\"></div>
+        </section>
+
+        <!-- CHAT STAGE -->
+        <section id=\"chatStage\" class=\"hidden flex-1 flex flex-col overflow-hidden\">
+          <div class=\"mb-3 px-4 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-sm\">
+            ✓ Resumes processed — ask a question below
+          </div>
+          <div id=\"messages\" class=\"flex-1 overflow-y-auto pr-1 space-y-4\"></div>
+          <form id=\"chatForm\" class=\"mt-3 flex gap-2 items-end\">
+            <input id=\"q\" type=\"text\" autocomplete=\"off\" placeholder=\"e.g. Who has Python & Django experience?\"
+                   class=\"flex-1 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500\" />
+            <button type=\"submit\" id=\"sendBtn\" class=\"px-6 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 font-bold disabled:opacity-50 transition\">
+              ➤
+            </button>
+          </form>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const CONV_KEY = \"talentlens_conversations\";
+    const ACTIVE_KEY = \"talentlens_active\";
+
+    // ---------- conversation persistence ----------
+    function loadConvs() { try { return JSON.parse(localStorage.getItem(CONV_KEY)) || []; } catch { return []; } }
+    function saveConvs(c) { localStorage.setItem(CONV_KEY, JSON.stringify(c)); }
+    function activeId() { return localStorage.getItem(ACTIVE_KEY); }
+    function setActiveId(id) { localStorage.setItem(ACTIVE_KEY, id); }
+
+    let conversations = loadConvs();
+
+    function currentConv() {
+      let id = activeId();
+      if (!conversations.find(c => c.id === id)) {
+        if (!conversations.length) id = newConv(false);
+        else id = conversations[0].id;
+      }
+      setActiveId(id);
+      return conversations.find(c => c.id === id) || newConv(true);
+    }
+
+    function newConv(toggle = true) {
+      const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      conversations.unshift({ id, title: \"New conversation\", messages: [] });
+      saveConvs(conversations);
+      if (toggle) { setActiveId(id); renderSidebar(); renderMessages(); }
+      return conversations.find(c => c.id === id);
+    }
+
+    function deleteConv(id) {
+      conversations = conversations.filter(c => c.id !== id);
+      saveConvs(conversations);
+      if (activeId() === id) {
+        if (conversations.length) setActiveId(conversations[0].id); else newConv(true);
+        renderMessages();
+      }
+      renderSidebar();
+    }
+
+    function clearAll() {
+      conversations = [];
+      saveConvs(conversations);
+      newConv(true);
+      renderSidebar();
+    }
+
+    function appendMessage(role, content) {
+      const c = currentConv();
+      c.messages.push({ role, content });
+      if (c.messages.length === 1 && role === \"user\") {
+        c.title = content.slice(0, 32) + (content.length > 32 ? \"…\" : \"\");
+      }
+      saveConvs(conversations);
+      renderSidebar();
+    }
+
+    // ---------- sidebar ----------
+    function renderSidebar() {
+      const list = $(\"convList\");
+      list.innerHTML = \"\";
+      if (!conversations.length) {
+        list.innerHTML = '<div class=\"text-sm text-slate-500 text-center py-8\">No conversations yet</div>';
+        return;
+      }
+      conversations.forEach(c => {
+        const el = document.createElement(\"div\");
+        const active = c.id === activeId();
+        el.className = \"group flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer text-sm transition \" +
+          (active ? \"bg-indigo-600/20 border border-indigo-500/30 text-white\" : \"text-slate-300 hover:bg-white/5\");
+        el.innerHTML = \`<span class=\"flex-1 truncate\">📌 ${c.title}</span>\` +
+          \`<button class=\"hidden group-hover:block text-slate-500 hover:text-red-400\" data-del=\"${c.id}\">✕</button>\`;
+        el.onclick = () => { setActiveId(c.id); renderSidebar(); renderMessages(); };
+        el.querySelector(\"[data-del]\").onclick = (e) => { e.stopPropagation(); deleteConv(c.id); };
+        list.appendChild(el);
+      });
+    }
+
+    // ---------- messages ----------
+    function renderMessages() {
+      const box = $(\"messages\");
+      box.innerHTML = \"\";
+      const c = currentConv();
+      c.messages.forEach(m => paintMsg(m.role, m.content));
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function paintMsg(role, content, isErr = false) {
+      const box = $(\"messages\");
+      const row = document.createElement(\"div\");
+      row.className = \"flex \" + (role === \"user\" ? \"justify-end\" : \"justify-start\") + \" gap-2 items-start\";
+
+      if (role === \"assistant\") {
+        const avatar = document.createElement(\"div\");
+        avatar.className = \"w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-extrabold text-white shrink-0 mt-0.5\";
+        avatar.textContent = \"T\";
+        row.appendChild(avatar);
+      }
+
+      const bubble = document.createElement(\"div\");
+      bubble.className = isErr
+        ? \"max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-red-500/15 border border-red-500/20 text-red-200 whitespace-pre-wrap\"
+        : role === \"user\"
+          ? \"max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tr-sm bg-indigo-600 text-white whitespace-pre-wrap\"
+          : \"max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tl-sm bg-white/5 border border-white/10 text-slate-100 whitespace-pre-wrap\";
+      bubble.textContent = content;
+      row.appendChild(bubble);
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
+      return bubble;
+    }
+
+    // ---------- status / stages ----------
+    const setStatus = (text, cls) => {
+      const s = $(\"status\");
+      s.textContent = text;
+      s.className = \"px-3 py-1 rounded-full text-xs font-semibold \" + cls;
+    };
+
+    document.addEventListener(\"DOMContentLoaded\", () => {
+      renderSidebar();
+      const c = currentConv();
+      if (c.messages.length) {
+        $(\"uploadStage\").classList.add(\"hidden\");
+        $(\"chatStage\").classList.remove(\"hidden\");
+        renderMessages();
+        fetch(\"/api/status\").then(r => r.json()).then(d => {
+          if (d.ready) setStatus(\"Ready — ask away\", \"bg-emerald-500/15 text-emerald-300 border border-emerald-500/20\");
+        }).catch(() => {});
+      }
+    });
+
+    // ---------- upload ----------
+    const dropZone = $(\"dropZone\"), filesInput = $(\"files\"), fileCount = $(\"fileCount\");
+
+    dropZone.addEventListener(\"click\", () => filesInput.click());
+    filesInput.addEventListener(\"change\", () => {
+      const n = filesInput.files.length;
+      fileCount.textContent = n ? \`${n} file${n > 1 ? \"s\" : \"\"} selected — ready to process\` : \"Drag & drop resumes here\";
+    });
+    [\"dragover\", \"dragleave\", \"drop\"].forEach(ev => dropZone.addEventListener(ev, e => {
+      e.preventDefault();
+      if (ev !== \"dragover\") dropZone.classList.remove(\"border-indigo-400\", \"bg-white/5\");
+      else dropZone.classList.add(\"border-indigo-400\", \"bg-white/5\");
+    }));
+    dropZone.addEventListener(\"drop\", e => {
+      filesInput.files = e.dataTransfer.files;
+      const n = filesInput.files.length;
+      fileCount.textContent = n ? \`${n} file${n > 1 ? \"s\" : \"\"} selected — ready to process\` : \"Drag & drop resumes here\";
+    });
+
+    $(\"processBtn\").addEventListener(\"click\", async () => {
+      if (!filesInput.files.length) { fileCount.textContent = \"⚠ Please choose at least one PDF first.\"; return; }
+      const btn = $(\"processBtn\"); btn.disabled = true; btn.textContent = \"Processing…\";
+      $(\"uploadMsg\").textContent = \"Uploading & building index… this can take a bit\";
+      const fd = new FormData();
+      for (const f of filesInput.files) fd.append(\"files\", f);
+      try {
+        const r = await fetch(\"/api/upload\", { method: \"POST\", body: fd });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || \"Upload failed.\");
+        $(\"uploadMsg\").textContent = \"\";
+        fileCount.textContent = \`✓ ${data.files} file(s) indexed (${data.chunks} chunks)\`;
+        setStatus(\"Ready — ask away\", \"bg-emerald-500/15 text-emerald-300 border border-emerald-500/20\");
+        $(\"uploadStage\").classList.add(\"hidden\");
+        $(\"chatStage\").classList.remove(\"hidden\");
+        $(\"q\").focus();
+      } catch (e) {
+        $(\"uploadMsg\").textContent = e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = \"⚡ Process Resumes\";
+      }
+    });
+
+    // ---------- chat ----------
+    $(\"chatForm\").addEventListener(\"submit\", async (e) => {
+      e.preventDefault();
+      const q = $(\"q\").value.trim();
+      if (!q) return;
+      paintMsg(\"user\", q);
+      appendMessage(\"user\", q);
+      $(\"q\").value = \"\";
+      $(\"sendBtn\").disabled = true;
+
+      const typing = paintMsg(\"assistant\", \"Thinking\");
+      const dots = document.createElement(\"span\");
+      dots.innerHTML = '<span class=\"dot\">.</span><span class=\"dot\">.</span><span class=\"dot\">.</span>';
+      typing.appendChild(dots);
+
+      try {
+        const r = await fetch(\"/api/chat\", {
+          method: \"POST\",
+          headers: { \"Content-Type\": \"application/json\" },
+          body: JSON.stringify({ question: q }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || \"Chat failed.\");
+        typing.textContent = data.answer;
+        appendMessage(\"assistant\", data.answer);
+      } catch (err) {
+        typing.textContent = err.message;
+        typing.className = \"max-w-[80%] px-4 py-2.5 rounded-2xl bg-red-500/15 border border-red-500/20 text-red-200 whitespace-pre-wrap\";
+      } finally {
+        $(\"sendBtn\").disabled = false;
+      }
+    });
+
+    // ---------- navbar actions ----------
+    $(\"newChatBtn\").addEventListener(\"click\", async () => {
+      newConv(true);
+      $(\"uploadStage\").classList.remove(\"hidden\");
+      $(\"chatStage\").classList.add(\"hidden\");
+      filesInput.value = \"\";
+      fileCount.textContent = \"Drag & drop resumes here\";
+      setStatus(\"No resumes loaded\", \"bg-white/5 border border-white/10 text-slate-300\");
+      try { await fetch(\"/api/reset\", { method: \"POST\" }); } catch (_) {}
+    });
+    $(\"clearAllBtn\").addEventListener(\"click\", clearAll);
+    $(\"sidebarToggle\").addEventListener(\"click\", () => $(\"sidebar\").classList.toggle(\"hidden\"));
+
+    // ---------- 3D tilt ----------
+    const card = $(\"mainCard\");
+    card.addEventListener(\"mousemove\", e => {
+      const r = card.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = \`perspective(1200px) rotateY(${x * 4}deg) rotateX(${-y * 4}deg)\`;
+    });
+    card.addEventListener(\"mouseleave\", () => { card.style.transform = \"perspective(1200px) rotateY(0) rotateX(0)\"; });
+
+    // ---------- particle network ----------
+    const canvas = $(\"particles\"), ctx = canvas.getContext(\"2d\");
+    let W, H, pts;
+    function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+    resize(); addEventListener(\"resize\", resize);
+    pts = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .5, vy: (Math.random() - .5) * .5 }));
+    setInterval(() => { if (pts.length < 60) { pts = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random()-.5)*.5, vy: (Math.random()-.5)*.5 })); } }, 1000);
+    (function loop() {
+      ctx.clearRect(0, 0, W, H);
+      for (const p of pts) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > W) p.vx *= -1;
+        if (p.y < 0 || p.y > H) p.vy *= -1;
+      }
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const d = Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y);
+          if (d < 120) { ctx.strokeStyle = \`rgba(129,140,248,${.12 * (1 - d / 120)})\`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke(); }
+        }
+      }
+      for (const p of pts) { ctx.fillStyle = \"rgba(196,181,253,.6)\"; ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2); ctx.fill(); }
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
