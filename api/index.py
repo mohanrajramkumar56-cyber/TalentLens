@@ -1,6 +1,7 @@
 import os
 import tempfile
 import json
+import re
 from typing import List
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -19,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-STATE = {"documents": "", "ready": False}
+STATE = {"documents": "", "ready": False, "skills": []}
 
 def extract_text_from_pdf(file_path):
     """Extract text from PDF"""
@@ -31,6 +32,26 @@ def extract_text_from_pdf(file_path):
     except Exception as e:
         print(f"Error reading PDF: {e}")
     return text
+
+def extract_skills(text):
+    """Extract skills from resume text"""
+    skills_keywords = [
+        "python", "java", "javascript", "react", "angular", "nodejs", "express",
+        "sql", "mongodb", "postgresql", "mysql", "aws", "docker", "kubernetes",
+        "git", "linux", "windows", "html", "css", "typescript", "nodejs",
+        "fastapi", "django", "flask", "spring", "microservices", "rest api",
+        "graphql", "machine learning", "deep learning", "data science",
+        "agile", "scrum", "project management", "leadership", "communication"
+    ]
+    
+    text_lower = text.lower()
+    found_skills = []
+    
+    for skill in skills_keywords:
+        if skill in text_lower:
+            found_skills.append(skill)
+    
+    return list(set(found_skills))
 
 @app.get("/")
 def index():
@@ -52,10 +73,6 @@ async def upload(files: List[UploadFile] = File(...)):
     """Upload and process resume PDFs"""
     if not files:
         return JSONResponse(status_code=400, content={"error": "No files uploaded."})
-    
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return JSONResponse(status_code=500, content={"error": "OPENAI_API_KEY not set"})
     
     UPLOAD_DIR = tempfile.gettempdir()
     all_text = ""
@@ -84,14 +101,16 @@ async def upload(files: List[UploadFile] = File(...)):
         return JSONResponse(status_code=400, content={"error": "No text extracted."})
     
     STATE["documents"] = all_text
+    STATE["skills"] = extract_skills(all_text)
     STATE["ready"] = True
     
-    return {"ok": True, "files": file_count, "chars": len(all_text)}
+    return {"ok": True, "files": file_count, "chars": len(all_text), "skills": STATE["skills"]}
 
 @app.post("/api/reset")
 def reset():
     """Reset the system"""
     STATE["documents"] = ""
+    STATE["skills"] = []
     STATE["ready"] = False
     return {"ok": True}
 
@@ -111,92 +130,96 @@ def chat(q: Question):
         return JSONResponse(status_code=500, content={"error": "OPENAI_API_KEY not set"})
     
     try:
-        client = OpenAI(api_key=api_key)
+        client = OpenAI(api_key=api_key, timeout=60.0)
         
         prompt = f"""You are a helpful assistant analyzing resumes. 
 
 Here are the resumes:
-{STATE["documents"]}
+{STATE["documents"][:5000]}
 
 User question: {q.question}
 
-Please answer the question based on the resume content."""
+Please answer the question based on the resume content. Be concise."""
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful resume analyzer assistant."},
+                {"role": "system", "content": "You are a helpful resume analyzer. Answer concisely."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
-            max_tokens=1000,
+            max_tokens=500,
         )
         
         answer = response.choices[0].message.content
         return {"answer": answer}
         
     except Exception as e:
-        error_msg = str(e)
-        # If it's the proxies error, try without that parameter
-        if "proxies" in error_msg:
-            try:
-                # Fallback: Use environment variable directly
-                import subprocess
-                result = subprocess.run([
-                    "python", "-c",
-                    f"from openai import OpenAI; import os; os.environ['OPENAI_API_KEY']='{api_key}'; c=OpenAI(); r=c.chat.completions.create(model='gpt-3.5-turbo', messages=[{{'role':'user','content':'{q.question}'}}]); print(r.choices[0].message.content)"
-                ], capture_output=True, text=True)
-                return {"answer": result.stdout}
-            except:
-                pass
-        return JSONResponse(status_code=500, content={"error": f"Chat failed: {error_msg}"})
+        return JSONResponse(status_code=500, content={"error": f"Chat failed: {str(e)}"})
 
 @app.post("/api/interview")
 def generate_interview():
-    """Generate interview questions based on resume"""
+    """Generate interview questions INSTANTLY - no API calls"""
     if not STATE["ready"]:
         return JSONResponse(
             status_code=400, content={"error": "Please upload resumes first."}
         )
     
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return JSONResponse(status_code=500, content={"error": "OPENAI_API_KEY not set"})
+    skills = STATE["skills"]
     
-    try:
-        client = OpenAI(api_key=api_key)
-        
-        prompt = f"""Based on these resumes, generate comprehensive interview questions for the candidate.
-
-Resumes:
-{STATE["documents"]}
-
-Generate 15-20 interview questions covering:
-
-TECHNICAL QUESTIONS (Based on their skills/experience):
-- 5-7 specific technical questions related to their tech stack
-- Include problem-solving scenarios
-- Include architecture/design questions
-
-GENERAL QUESTIONS (Behavioral & Soft Skills):
-- 5-7 behavioral questions about teamwork, conflict resolution, leadership
-- Questions about their achievements and challenges
-- Questions about their career goals and motivation
-
-Format as two separate lists with clear numbering."""
-        
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an expert HR interviewer and technical recruiter. Generate thoughtful, fair interview questions."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8,
-            max_tokens=2000,
-        )
-        
-        answer = response.choices[0].message.content
-        return {"questions": answer}
-        
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": f"Interview generation failed: {str(e)}"})
+    # TECHNICAL QUESTIONS based on detected skills
+    technical_questions = [
+        "Can you explain a challenging project you've worked on and how you solved the technical problems?",
+        "What design patterns are you most familiar with and where have you applied them?",
+        "Describe your experience with the technologies listed in your resume. Which one are you most proficient in?",
+        "How do you approach debugging and troubleshooting code issues?",
+        "Tell us about a time when you had to optimize code or improve performance. What did you do?",
+        "How do you handle version control and collaborate with other developers?",
+        "Describe your experience with databases. How do you design efficient database schemas?",
+    ]
+    
+    # Add skill-specific questions
+    if any(s in skills for s in ["python", "java", "javascript"]):
+        technical_questions.extend([
+            "Can you walk us through a complex algorithm you've implemented?",
+            "How do you write and maintain unit tests for your code?",
+            "What's your experience with API development and RESTful services?",
+        ])
+    
+    if any(s in skills for s in ["react", "angular", "nodejs"]):
+        technical_questions.extend([
+            "How do you manage state in your frontend applications?",
+            "What's your approach to handling async operations and promises?",
+        ])
+    
+    if any(s in skills for s in ["docker", "kubernetes", "aws"]):
+        technical_questions.extend([
+            "How do you approach containerization and deployment?",
+            "What's your experience with cloud platforms and microservices?",
+        ])
+    
+    # GENERAL/BEHAVIORAL QUESTIONS
+    general_questions = [
+        "Tell me about yourself and your professional background.",
+        "What are your greatest strengths as a developer/professional?",
+        "What areas would you like to improve or develop further?",
+        "Describe a time when you had to work with a difficult team member. How did you handle it?",
+        "Tell us about a project where you took the lead. What was the outcome?",
+        "How do you stay updated with new technologies and industry trends?",
+        "Describe a situation where you had to learn something new quickly. How did you approach it?",
+        "Tell us about a failure or mistake you made and what you learned from it.",
+        "How do you prioritize your work when you have multiple tasks?",
+        "What are your career goals for the next 3-5 years?",
+        "Why are you interested in this position/company?",
+        "How do you communicate technical concepts to non-technical stakeholders?",
+        "Tell us about your experience working in Agile environments.",
+        "How do you handle feedback and criticism?",
+        "Describe your ideal work environment and team culture.",
+    ]
+    
+    return {
+        "technical_questions": technical_questions[:10],
+        "general_questions": general_questions,
+        "detected_skills": skills,
+        "total_questions": 25
+    }
